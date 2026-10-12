@@ -456,6 +456,14 @@ async function rememberHandle(handle){
 async function forgetHandle(){
   try{ await idbDel(HANDLE_KEY); }catch(e){}
 }
+/* 读取上次授权的句柄。IndexedDB 在隐私模式、存储受限等情况下可能长时间
+   不 settle，这里加超时兜底，避免它挡住后面的只读回退路径。 */
+function idbGetHandle(){
+  return Promise.race([
+    idbGet(HANDLE_KEY).catch(() => null),
+    new Promise(resolve => setTimeout(() => resolve(null), 1500))
+  ]);
+}
 
 /* 根据当前是否持有可写文件句柄，更新备份提醒文字 */
 function updateBackupReminderText(){
@@ -1337,75 +1345,73 @@ async function bootstrapLocal(){
 }
 
 async function autoLoadKmIni(){
-  /* ---- 1) HTTP(S) ---- */
-  if(location.protocol === 'http:' || location.protocol === 'https:'){
-    try{
-      const res = await fetch('km.ini', {cache:'no-store'});
-      if(res.ok){
-        const text = await res.text();
-        if(await loadText(text, 'km.ini', true)){
-          setFileHandle(null);
-          setStatus('已自动载入同目录 km.ini（只读）。如需写回原文件，请点击「导入文件」选择该文件。', 'ok');
-        }
-        return;
-      }
-      return;
-    }catch(e){
-      return;
-    }
-  }
-
-  /* ---- 2) file:// ---- */
-  if(!window.showOpenFilePicker) return;
-
-  let handle = null;
-  try{ handle = await idbGet(HANDLE_KEY); }catch(e){ handle = null; }
-  if(!handle) return;
-
-  try{
-    const file = await handle.getFile();
-    const text = await file.text();
-    if(await loadText(text, file.name, true)){
-      setFileHandle(handle);
-      setStatus('已自动载入 ' + file.name + '，点击「保存」可直接写回。', 'ok');
-    }else{
-      setStatus('上次使用的 ' + file.name + ' 内容无效，已使用本地缓存数据。', 'warn');
-    }
-    return;
-  }catch(err){
-    if(err && err.name === 'NotFoundError'){
-      await forgetHandle();
-      return;
-    }
-    pendingFileHandle = handle;
-    setStatus('检测到上次使用的文件「' + handle.name + '」，一键恢复自动读取。', '', '恢复访问', async () => {
+  /* ---- 1) 先尝试恢复上次授权的文件句柄 ----
+     句柄保存在 IndexedDB，按来源隔离：file:// 与 http://localhost:端口 各存一份。
+     当前来源下授权过就直接带句柄打开，顶栏出现「保存」，改动可写回原文件。 */
+  if(window.showOpenFilePicker){
+    const handle = await idbGetHandle();
+    if(handle){
       try{
-        try{
-          if(handle.requestPermission) await handle.requestPermission({mode:'read'});
-        }catch(e){ /* 忽略 */ }
-
         const file = await handle.getFile();
         const text = await file.text();
         if(await loadText(text, file.name, true)){
           setFileHandle(handle);
-          setStatus('已载入 ' + file.name + '（点击「保存」可直接写回）', 'ok');
+          setStatus('已自动载入 ' + file.name + '，点击「保存」可直接写回。', 'ok');
         }else{
-          pendingFileHandle = null;
-          setStatus('文件内容无效，已使用本地缓存数据。', 'warn');
+          setStatus('上次使用的 ' + file.name + ' 内容无效，已使用本地缓存数据。', 'warn');
         }
-      }catch(err2){
-        pendingFileHandle = null;
-        await forgetHandle();
-        if(err2 && err2.name === 'NotFoundError'){
-          setStatus('上次使用的文件已不存在，已恢复为浏览器本地存储方案。');
-        }else if(err2 && (err2.name === 'NotAllowedError' || err2.name === 'SecurityError')){
-          setStatus('浏览器仍需要您重新选择一次该文件，请点击顶栏「导入文件」。', 'warn');
+        return;
+      }catch(err){
+        if(err && err.name === 'NotFoundError'){
+          await forgetHandle();   /* 文件已不存在，清掉句柄，继续往下回退 */
         }else{
-          setStatus('文件不可用：' + (err2.message || err2), 'warn');
+          pendingFileHandle = handle;
+          setStatus('检测到上次使用的文件「' + handle.name + '」，一键恢复自动读取。', '', '恢复访问', async () => {
+            try{
+              try{
+                if(handle.requestPermission) await handle.requestPermission({mode:'read'});
+              }catch(e){ /* 忽略 */ }
+
+              const file = await handle.getFile();
+              const text = await file.text();
+              if(await loadText(text, file.name, true)){
+                setFileHandle(handle);
+                setStatus('已载入 ' + file.name + '（点击「保存」可直接写回）', 'ok');
+              }else{
+                pendingFileHandle = null;
+                setStatus('文件内容无效，已使用本地缓存数据。', 'warn');
+              }
+            }catch(err2){
+              pendingFileHandle = null;
+              await forgetHandle();
+              if(err2 && err2.name === 'NotFoundError'){
+                setStatus('上次使用的文件已不存在，已恢复为浏览器本地存储方案。');
+              }else if(err2 && (err2.name === 'NotAllowedError' || err2.name === 'SecurityError')){
+                setStatus('浏览器仍需要您重新选择一次该文件，请点击顶栏「导入文件」。', 'warn');
+              }else{
+                setStatus('文件不可用：' + (err2.message || err2), 'warn');
+              }
+            }
+          });
+          return;
         }
       }
-    });
+    }
   }
+
+  /* ---- 2) 回退：http(s) 下按 URL 只读载入同目录 km.ini ----
+     fetch 只能取到字节、拿不到文件句柄，所以此时不出现「保存」按钮。
+     想要写回，在页面里点「导入文件」选中该文件授权一次即可，下次会走上面第 1 步。 */
+  if(location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  try{
+    const res = await fetch('km.ini', {cache:'no-store'});
+    if(!res.ok) return;
+    const text = await res.text();
+    if(await loadText(text, 'km.ini', true)){
+      setFileHandle(null);
+      setStatus('已自动载入同目录 km.ini（只读）。如需写回原文件，请点击「导入文件」选择该文件。', 'ok');
+    }
+  }catch(e){ /* 取不到就静默跳过，沿用本地缓存数据 */ }
 }
 
 /* ========== 事件绑定 ========== */
