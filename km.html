@@ -342,6 +342,10 @@ function askConfirm(title, message, confirmText, danger){
 }
 
 function setStatus(text, type, btnLabel, onClick){
+  /* 「恢复访问」是状态条上唯一带按钮的提示。一旦本条提示被别的消息顶掉，
+     那个按钮就不在屏幕上了，用户也无法再「拒绝」它，因此放弃句柄的语义
+     随之失效——否则下次关掉一条不相干的状态条，就会把已授权的句柄删掉。 */
+  if(!(btnLabel && onClick)) pendingFileHandle = null;
   const n = $('notice');
   $('noticeText').textContent = text;
   n.className = 'notice ' + (type || '');
@@ -450,8 +454,18 @@ async function idbDel(key){
   });
 }
 
+/* 记住文件句柄。成功返回 true；失败返回错误描述字符串。
+   这里不静默吞异常：句柄存不进去的话，下次打开就恢复不了，
+   用户会以为是「自动恢复」坏了，却看不到任何原因。 */
 async function rememberHandle(handle){
-  try{ await idbSet(HANDLE_KEY, handle); }catch(e){}
+  try{
+    await idbSet(HANDLE_KEY, handle);
+    const back = await idbGet(HANDLE_KEY);
+    if(!back) return '写入后读回为空';
+    return true;
+  }catch(e){
+    return (e && e.name) ? (e.name + (e.message ? ('：' + e.message) : '')) : String(e);
+  }
 }
 async function forgetHandle(){
   try{ await idbDel(HANDLE_KEY); }catch(e){}
@@ -632,11 +646,10 @@ function showBackupReminder(){
   backupNeeded = true;
   updateBackupReminderText();   // 根据是否持有文件句柄，切换提示文字
   $('backupReminder').hidden = false;
-  if(pendingFileHandle){
-    pendingFileHandle = null;
-    forgetHandle();
-    toast('已放弃恢复原文件，本次修改保存在浏览器本地');
-  }
+  /* 注意：这里不要顺手 forgetHandle()。本函数在所有数据变更处都会被调用，
+     把「放弃恢复句柄」塞进来等于「改一次数据就删一次句柄」——可用户并没有
+     拒绝恢复，只是改了数据，下次打开还得重新「导入文件」。放弃句柄只应在
+     用户明确关闭状态条上的「恢复访问」提示时发生（见 noticeClose）。 */
   try{ localStorage.setItem(BACKUP_KEY, 'true'); }catch(e){
     setStatus('无法记录备份提醒：' + e.message, 'warn');
   }
@@ -1254,8 +1267,12 @@ async function openFile(){
       const text = await file.text();
       if(await loadText(text, file.name)){
         setFileHandle(handle);
-        await rememberHandle(handle);
-        setStatus('已导入 ' + file.name + '（点击「保存」可直接写回该文件）', 'ok');
+        const remembered = await rememberHandle(handle);
+        if(remembered === true){
+          setStatus('已导入 ' + file.name + '（点击「保存」可直接写回该文件）', 'ok');
+        }else{
+          setStatus('已导入 ' + file.name + '，但文件句柄没能保存到浏览器存储（' + remembered + '），下次打开需要重新选择该文件。', 'warn');
+        }
       }
     }catch(err){
       if(err && err.name !== 'AbortError'){
