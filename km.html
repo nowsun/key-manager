@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KM · 密码管理</title>
+<style>
+:root{
+  --bg:#f4f6f9; --panel:#fff; --line:#e3e7ee; --text:#1f2937; --muted:#8a93a3;
+  --accent:#3b82f6; --accent-soft:#eff6ff; --danger:#ef4444; --radius:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+button{font:inherit;cursor:pointer}
+.muted{color:var(--muted)}
+
+.topbar{display:grid;grid-template-columns:210px minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;min-width:0;font-size:16px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.backup-reminder{color:#dc2626;font-size:12px;font-weight:700;letter-spacing:0}
+.backup-reminder[hidden]{display:none}
+.topbar .search{justify-self:center;width:min(100%,480px)}
+.file-actions{display:flex;align-items:center;gap:8px}
+.brand small{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:#fff;color:var(--text);padding:6px 12px;border-radius:8px;transition:.15s;white-space:nowrap}
+.btn:hover{background:#f7f9fc;border-color:#cbd5e1}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#2563eb}
+.btn[hidden]{display:none}
+.search{border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:180px;font:inherit;outline:none;background:#fbfcfe}
+.search:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #dbeafe}
+
+.notice{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:36px;padding:7px 44px 7px 44px;font-size:12.5px;text-align:center;
+  background:#eff6ff;color:#1d4ed8;border-bottom:1px solid #dbeafe}
+.notice[hidden]{display:none}
+.notice.warn{background:#fffbeb;color:#92400e;border-bottom-color:#fde68a}
+.notice.ok{background:#f0fdf4;color:#166534;border-bottom-color:#bbf7d0}
+.notice #noticeText{max-width:100%}
+.notice .spacer{display:none}
+.notice .btn{padding:3px 10px;font-size:12px;border-color:currentColor;color:inherit;background:transparent}
+.notice .btn:hover{background:rgba(0,0,0,.06)}
+.notice #noticeBtn{position:static;flex:none}
+.notice-close{position:absolute;right:10px;border:0;background:transparent;color:inherit;border-radius:5px;font-size:18px;line-height:1;padding:0 5px;opacity:.7}
+.notice-close:hover{background:rgba(0,0,0,.06);opacity:1}
+
+main{flex:1;display:flex;overflow:hidden}
+aside{width:210px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.side-head{display:flex;align-items:center;justify-content:space-between;height:49px;min-height:49px;padding:0 12px;font-size:12px;color:var(--muted);letter-spacing:.5px}
+.side-title{display:flex;align-items:center;gap:6px}
+.side-total-count{font-size:11px;color:#64748b;background:#f1f3f7;border-radius:10px;padding:0 6px;letter-spacing:0}
+.side-head button{border:none;background:var(--accent-soft);color:var(--accent);width:24px;height:24px;border-radius:6px;font-size:16px;line-height:1}
+.cat-list{list-style:none;margin:0;padding:0 8px 12px;overflow:auto;flex:1}
+.cat-list li{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:8px;cursor:pointer;color:#374151}
+.cat-list li:hover{background:#f5f7fa}
+.cat-list li.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.cat-list li[draggable="true"]{cursor:grab}
+.cat-list li.dragging,.subcat-tab-wrap.dragging{opacity:.45}
+.cat-list li.drop-before{box-shadow:inset 0 2px var(--accent)}
+.cat-list li.drop-after{box-shadow:inset 0 -2px var(--accent)}
+.subcat-tab-wrap[draggable="true"]{cursor:grab}
+.subcat-tab-wrap.drop-before{box-shadow:inset 2px 0 var(--accent)}
+.subcat-tab-wrap.drop-after{box-shadow:inset -2px 0 var(--accent)}
+.cat-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.count{font-size:11px;color:var(--muted);background:#f1f3f7;border-radius:10px;padding:0 6px}
+.cat-list li.active .count{background:#dbeafe;color:var(--accent)}
+.cat-ops{display:none;gap:2px}
+.cat-list li:hover .cat-ops{display:flex}
+.mini{border:none;background:transparent;color:var(--muted);font-size:12px;padding:2px 5px;border-radius:5px;line-height:1;white-space:nowrap}
+.mini:hover{background:#e8edf5;color:var(--accent)}
+
+section.content{flex:1;overflow:auto;padding:0 14px 24px 8px;display:flex;flex-direction:column}
+.content-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.content-head[hidden]{display:none}
+.content-head h2{margin:0;font-size:17px}
+.subcategory-toolbar{display:flex;align-items:center;gap:10px;height:49px;min-height:49px;margin-bottom:0;min-width:0}
+.subcategory-tabs{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow-x:auto;padding:2px 2px 2px 0}
+.subcat-tab{border:1px solid var(--line);background:#fff;color:#4b5563;padding:5px 10px;border-radius:8px;white-space:nowrap}
+.subcat-tab:hover{background:#f7f9fc;border-color:#cbd5e1}
+.subcat-tab.active{background:var(--accent-soft);border-color:#bfdbfe;color:var(--accent);font-weight:600}
+.subcat-count{margin-left:5px;font-size:11px;color:var(--muted)}
+.subcat-tab.active .subcat-count{color:var(--accent)}
+.subcat-tab-wrap{display:flex;align-items:center;flex:none}
+.subcat-tab-content{display:inline-flex;align-items:center;gap:5px}
+.subcat-rename{display:none;border:0;background:transparent;color:var(--muted);font-size:12px;line-height:1;padding:2px 3px;border-radius:4px}
+.subcat-tab-wrap.active-subcat .subcat-rename{display:block}
+.subcat-rename:hover{background:#e8edf5;color:var(--accent)}
+.card-title{min-width:0;flex:1}
+.card-title-row{display:flex;align-items:center;gap:4px;min-width:0}
+.card-title-row .t{min-width:0}
+.subcategory-actions{display:flex;align-items:center;gap:8px;flex:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:8px;flex:1;align-content:start}
+.watermark{margin-top:auto;padding:28px 8px 4px;text-align:center;color:#9aa3b2;font-size:12px;letter-spacing:1px;opacity:.62;user-select:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.card:hover{box-shadow:0 4px 14px rgba(16,24,40,.08)}
+.card-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}
+.card-head .t{font-weight:600;font-size:15px;word-break:break-all}
+.card-subtitle{margin-top:2px;color:var(--muted);font-size:12px;font-weight:400;line-height:1.4;word-break:break-word}
+.icon{border:none;background:transparent;color:var(--muted);font-size:13px;padding:2px 6px;border-radius:6px}
+.icon:hover{background:#eef2f7;color:var(--accent)}
+.icon.danger:hover{background:#fee2e2;color:var(--danger)}
+.icon svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.field{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+.field .k{color:var(--muted);width:36px;flex:none}
+.field .v{flex:1;word-break:break-all}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px}
+.link{color:var(--accent);text-decoration:none}
+.link:hover{text-decoration:underline}
+.cat-tag{display:inline-block;font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;margin-bottom:6px}
+.empty{color:var(--muted);padding:40px 10px;text-align:center;grid-column:1/-1}
+
+dialog{border:none;border-radius:14px;padding:0;width:min(440px,92vw);box-shadow:0 24px 64px rgba(15,23,42,.3)}
+dialog::backdrop{background:rgba(15,23,42,.45)}
+#form{padding:20px;display:flex;flex-direction:column;gap:12px}
+#form,.dialog-form{padding:20px;display:flex;flex-direction:column;gap:12px}
+#form h3,.dialog-form h3{margin:0;font-size:16px}
+#form label,.dialog-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+#form input,#form textarea,.dialog-form input,.dialog-form select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;color:var(--text);background:#fff;outline:none}
+#form input:focus,#form textarea:focus,.dialog-form input:focus,.dialog-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #dbeafe}
+#form textarea{resize:vertical;min-height:56px}
+.pwrow{display:flex;gap:8px}
+.pwrow input{flex:1}
+.pwrow .btn{flex:none}
+.endpoint-row{display:flex;gap:8px}
+.endpoint-row input:first-child{flex:1;min-width:0}
+.endpoint-row input:last-child{width:110px;flex:none}
+.dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.move-item-name{padding:8px 10px;border-radius:8px;background:#f4f6f9;color:var(--text);font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.action-message{margin:0;color:var(--text);font-size:14px;overflow-wrap:anywhere;white-space:pre-line}
+.action-error{color:var(--danger);font-size:12px}
+.dialog-form [hidden]{display:none}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.danger:hover{background:#dc2626;border-color:#dc2626}
+
+#toast{position:fixed;left:50%;top:16px;transform:translate(-50%,-20px);background:#111827;color:#fff;
+  padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:99}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:640px){
+  .topbar{grid-template-columns:150px minmax(0,1fr);gap:6px}
+  .topbar .search{grid-column:2;grid-row:2;justify-self:center;width:min(100%,240px)}
+  .file-actions{grid-column:2;grid-row:1;justify-self:end;flex-wrap:wrap;justify-content:flex-end}
+  aside{width:150px}
+  .brand small{display:none}
+  .backup-reminder{font-size:11px}
+  .subcategory-toolbar{gap:6px}
+  .subcategory-actions{gap:4px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">🔐 KM<small>密码管理</small><span class="backup-reminder" id="backupReminder" hidden>● 请及时「导出备份」</span></div>
+  <input class="search" id="search" type="search" placeholder="搜索…">
+  <div class="file-actions">
+    <button class="btn primary" id="btnSave" hidden>保存</button>
+    <button class="btn" id="btnOpen">导入文件</button>
+    <button class="btn primary" id="btnExport">导出备份</button>
+  </div>
+  <input type="file" id="fileInput" accept=".ini,.json,application/json" hidden>
+</header>
+
+<div class="notice" id="notice" hidden>
+  <span id="noticeText"></span>
+  <span class="spacer"></span>
+  <button class="btn" id="noticeBtn" hidden></button>
+  <button class="notice-close" id="noticeClose" type="button" title="关闭提示" aria-label="关闭提示">×</button>
+</div>
+
+<main>
+  <aside>
+    <div class="side-head"><span class="side-title">分类<span class="side-total-count" id="totalItemCount">0</span></span><button id="btnAddCat" title="新建分类">+</button></div>
+    <ul class="cat-list" id="catList"></ul>
+  </aside>
+
+  <section class="content">
+    <div class="subcategory-toolbar">
+      <div class="subcategory-tabs" id="subcategoryTabs"></div>
+      <div class="subcategory-actions">
+        <button class="btn" id="btnAddSubcat">添加小类</button>
+        <button class="btn primary" id="btnAddItem">+ 添加密码</button>
+      </div>
+    </div>
+    <div class="content-head">
+      <h2 id="catTitle">—</h2>
+    </div>
+    <div class="grid" id="itemList"></div>
+    <footer class="watermark">© 2026 初心﹡点亮未来</footer>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <form id="form">
+    <h3 id="dlgTitle">添加密码</h3>
+    <label>名称<input name="title" required placeholder="如：GitHub"></label>
+    <label>描述<input name="description" placeholder="显示在名称下方，如：生产环境"></label>
+    <label>账号 / 用户名<input name="username" placeholder="user@example.com"></label>
+    <label>密码
+      <div class="pwrow">
+        <input name="password" type="password" autocomplete="new-password" placeholder="密码">
+        <button type="button" class="btn" id="btnToggleFormPassword" aria-pressed="false">显示</button>
+        <button type="button" class="btn" id="btnGen">随机生成</button>
+      </div>
+    </label>
+    <label>地址 / 端口
+      <div class="endpoint-row">
+        <input name="endpointHost" placeholder="地址（可选）" aria-label="地址（可选）">
+        <input name="endpointPort" inputmode="numeric" placeholder="端口（可选）" aria-label="端口（可选）">
+      </div>
+    </label>
+    <label>网址<input name="url" placeholder="https://"></label>
+    <label>备注<textarea name="note" placeholder="可选"></textarea></label>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="btnCancel">取消</button>
+      <button type="submit" class="btn primary">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="moveDlg">
+  <form id="moveForm" class="dialog-form">
+    <h3>移动密码</h3>
+    <div class="move-item-name" id="moveItemName" hidden></div>
+    <label>目标分类<select name="category" required></select></label>
+    <label>目标小类<select name="subcategory" required></select></label>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="btnMoveCancel">取消</button>
+      <button type="submit" class="btn primary">移动</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="actionDlg">
+  <form id="actionForm" class="dialog-form">
+    <h3 id="actionTitle"></h3>
+    <p id="actionMessage" class="action-message" hidden></p>
+    <label id="actionInputLabel" hidden><span id="actionLabelText"></span>
+      <input id="actionInput" name="value" maxlength="80">
+    </label>
+    <div id="actionError" class="action-error" role="alert" hidden></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="btnActionCancel">取消</button>
+      <button type="submit" class="btn primary" id="btnActionConfirm">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ========== 全局状态 ========== */
+const LS_KEY = 'km.data.v1';
+const BACKUP_KEY = 'km.backup-needed.v1';
+const IDB_NAME = 'km.fs';
+const IDB_STORE = 'handles';
+const HANDLE_KEY = 'kmfile';
+const STORAGE_KEY_B64 = 'AlOTPI13z96KE15vHX4hq9QO7MQkkWJkyWzQmR6mvE8=';
+
+let data = {};
+let currentCat = '';
+let currentSubcat = '*';
+let keyword = '';
+let backupNeeded = false;
+let localSaveOk = true;
+let storageWritable = true;
+let saveRevision = 0;
+let saveQueue = Promise.resolve();
+let storageCryptoKey;
+let editCtx = null;
+let actionDialogResolver = null;
+let actionDialogOptions = null;
+let fileHandle = null;
+let pendingFileHandle = null;
+const revealed = new Set();
+const revealTimers = new Map();
+
+/* ========== 工具 ========== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+let toastTimer;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function openActionDialog(options){
+  const input = $('actionInput');
+  $('actionTitle').textContent = options.title;
+  $('actionMessage').textContent = options.message || '';
+  $('actionMessage').hidden = !options.message;
+  $('actionInputLabel').hidden = !options.inputLabel;
+  $('actionLabelText').textContent = options.inputLabel || '';
+  input.value = options.value || '';
+  input.placeholder = options.placeholder || '';
+  $('actionError').textContent = '';
+  $('actionError').hidden = true;
+  $('btnActionCancel').hidden = options.cancelText === false;
+  $('btnActionCancel').textContent = options.cancelText || '取消';
+  $('btnActionConfirm').textContent = options.confirmText || '确定';
+  $('btnActionConfirm').classList.toggle('danger', Boolean(options.danger));
+  actionDialogOptions = options;
+  return new Promise(resolve => {
+    actionDialogResolver = resolve;
+    $('actionDlg').showModal();
+    setTimeout(() => (options.inputLabel ? input : $('btnActionConfirm')).focus(), 50);
+  });
+}
+
+function finishActionDialog(value){
+  if(!actionDialogResolver) return;
+  const resolve = actionDialogResolver;
+  actionDialogResolver = null;
+  actionDialogOptions = null;
+  $('actionDlg').close();
+  resolve(value);
+}
+
+function askName(title, inputLabel, value, validate){
+  return openActionDialog({
+    title, inputLabel, value,
+    placeholder:'请输入名称',
+    validate,
+    confirmText:'确定'
+  });
+}
+
+function askConfirm(title, message, confirmText, danger){
+  return openActionDialog({title, message, confirmText:confirmText || '确定', cancelText:'取消', danger});
+}
+
+function setStatus(text, type, btnLabel, onClick){
+  const n = $('notice');
+  $('noticeText').textContent = text;
+  n.className = 'notice ' + (type || '');
+  n.hidden = false;
+  const b = $('noticeBtn');
+  if(btnLabel && onClick){
+    b.hidden = false;
+    b.textContent = btnLabel;
+    b.onclick = onClick;
+  }else{
+    b.hidden = true;
+    b.onclick = null;
+  }
+}
+
+async function copy(text){
+  if(!text){ toast('没有内容可复制'); return; }
+  try{
+    if(!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let copied = false;
+    try{ copied = document.execCommand('copy'); }catch(_){}
+    ta.remove();
+    toast(copied ? '已复制' : '复制失败，请检查浏览器权限');
+  }
+}
+
+function genPassword(len){
+  len = Number.isInteger(len) ? Math.max(1, Math.min(len, 128)) : 16;
+  const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*-_=+';
+  const max = Math.floor(0x100000000 / chars.length) * chars.length;
+  const arr = new Uint32Array(Math.ceil(len * 1.1));
+  let s = '';
+  while(s.length < len){
+    crypto.getRandomValues(arr);
+    for(let i = 0; i < arr.length && s.length < len; i++){
+      if(arr[i] < max) s += chars[arr[i] % chars.length];
+    }
+  }
+  return s;
+}
+
+function clearRevealed(){
+  revealTimers.forEach(timer => clearTimeout(timer));
+  revealTimers.clear();
+  revealed.clear();
+}
+
+function toggleRevealed(key){
+  if(revealed.has(key)){
+    revealed.delete(key);
+    clearTimeout(revealTimers.get(key));
+    revealTimers.delete(key);
+  }else{
+    revealed.add(key);
+    revealTimers.set(key, setTimeout(() => {
+      revealed.delete(key);
+      revealTimers.delete(key);
+      renderItems();
+    }, 15000));
+  }
+}
+
+/* ========== IndexedDB：持久化文件句柄 ========== */
+function idbOpen(){
+  return new Promise((resolve, reject) => {
+    if(!('indexedDB' in window)) return reject(new Error('当前浏览器不支持 IndexedDB'));
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('IndexedDB 打开失败'));
+  });
+}
+async function idbSet(key, val){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const rq = tx.objectStore(IDB_STORE).get(key);
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+async function idbDel(key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function rememberHandle(handle){
+  try{ await idbSet(HANDLE_KEY, handle); }catch(e){}
+}
+async function forgetHandle(){
+  try{ await idbDel(HANDLE_KEY); }catch(e){}
+}
+
+/* 根据当前是否持有可写文件句柄，更新备份提醒文字 */
+function updateBackupReminderText(){
+  const el = $('backupReminder');
+  if(fileHandle){
+    el.textContent = '● 请及时「保存」或「导出备份」';
+    el.title = '数据已修改，点击「保存」写回文件，或「导出备份」';
+  }else{
+    el.textContent = '● 请及时导出备份';
+    el.title = '数据已加密保存在浏览器本地，请及时「导出备份」';
+  }
+}
+
+function setFileHandle(handle){
+  fileHandle = handle || null;
+  if(fileHandle) pendingFileHandle = null;
+  $('btnSave').hidden = !fileHandle;
+  // 若提醒条正在显示，同步更新文字
+  if(!$('backupReminder').hidden) updateBackupReminderText();
+}
+
+/* ========== 数据 ========== */
+function defaultData(){
+  return {
+    "示例分类": {
+      "未分类": [
+        {
+          "title": "示例账号",
+          "username": "demo@example.com",
+          "password": "Demo@123456",
+          "url": "https://example.com",
+          "note": "这是示例数据，可以删除"
+        }
+      ]
+    }
+  };
+}
+
+function normalize(){
+  const out = {};
+  const source = data && data.version === 2 && data.categories &&
+    typeof data.categories === 'object' && !Array.isArray(data.categories)
+    ? data.categories
+    : data;
+  Object.keys(source || {}).forEach(category => {
+    const raw = source[category];
+    const subcats = Array.isArray(raw)
+      ? {'未分类': raw}
+      : raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw.subcategories && typeof raw.subcategories === 'object' && !Array.isArray(raw.subcategories)
+          ? raw.subcategories
+          : raw)
+        : null;
+    if(!subcats) return;
+    const normalized = {};
+    Object.keys(subcats).forEach(subcat => {
+      const items = subcats[subcat];
+      if(!Array.isArray(items)) return;
+      const name = String(subcat) === '默认小类' ? '未分类' : String(subcat);
+      const converted = items.filter(it => it && typeof it === 'object').map(it => ({
+        title:    String(it.title    ?? ''),
+        description: String(it.description ?? ''),
+        username: String(it.username ?? ''),
+        password: String(it.password ?? ''),
+        endpointHost: String(it.endpointHost ?? it.host ?? ''),
+        endpointPort: String(it.endpointPort ?? it.port ?? ''),
+        url:      String(it.url      ?? ''),
+        note:     String(it.note     ?? '')
+      }));
+      if(!normalized[name]) normalized[name] = [];
+      normalized[name].push(...converted);
+    });
+    out[String(category)] = normalized;
+  });
+  data = out;
+}
+
+function serializedData(){
+  const categories = {};
+  Object.keys(data).forEach(category => {
+    categories[category] = {subcategories: data[category]};
+  });
+  return {version:2, categories};
+}
+
+function serializedBackupData(){
+  const categories = {};
+  Object.keys(data).forEach(category => {
+    const subcategories = {};
+    Object.keys(data[category]).forEach(subcategory => {
+      const items = data[category][subcategory];
+      if(items.length) subcategories[subcategory] = items;
+    });
+    categories[category] = {subcategories};
+  });
+  return {version:2, categories};
+}
+
+function getStorageCryptoKey(){
+  if(!window.crypto || !crypto.subtle) throw new Error('当前浏览器环境不支持 Web Crypto，无法加密本地数据');
+  if(!storageCryptoKey){
+    const rawKey = Uint8Array.from(atob(STORAGE_KEY_B64), ch => ch.charCodeAt(0));
+    storageCryptoKey = crypto.subtle.importKey('raw', rawKey, {name:'AES-GCM'}, false, ['encrypt', 'decrypt']);
+  }
+  return storageCryptoKey;
+}
+
+function encodeBase64(bytes){
+  let binary = '';
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+async function encryptLocal(plainText){
+  const key = await getStorageCryptoKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    {name:'AES-GCM', iv},
+    key,
+    new TextEncoder().encode(plainText)
+  );
+  return JSON.stringify({
+    format:'km-encrypted',
+    version:1,
+    iv:encodeBase64(iv),
+    data:encodeBase64(new Uint8Array(encrypted))
+  });
+}
+
+async function decryptLocal(raw){
+  const stored = JSON.parse(raw);
+  if(!stored || stored.format !== 'km-encrypted') return stored;
+  if(stored.version !== 1 || typeof stored.iv !== 'string' || typeof stored.data !== 'string'){
+    throw new Error('本地加密数据格式无效');
+  }
+  const key = await getStorageCryptoKey();
+  const plainBytes = await crypto.subtle.decrypt(
+    {name:'AES-GCM', iv:Uint8Array.from(atob(stored.iv), ch => ch.charCodeAt(0))},
+    key,
+    Uint8Array.from(atob(stored.data), ch => ch.charCodeAt(0))
+  );
+  return JSON.parse(new TextDecoder().decode(plainBytes));
+}
+
+function saveLocal(){
+  if(!storageWritable) return Promise.resolve(false);
+  const revision = ++saveRevision;
+  const plainText = JSON.stringify(serializedData());
+  const operation = saveQueue.then(async () => {
+    if(!storageWritable) return false;
+    const encrypted = await encryptLocal(plainText);
+    if(revision !== saveRevision) return true;
+    localStorage.setItem(LS_KEY, encrypted);
+    localSaveOk = true;
+    return true;
+  }).catch(e => {
+    localSaveOk = false;
+    setStatus('浏览器本地加密保存失败：' + e.message + '。请导出文件备份，避免关闭页面后数据丢失。', 'warn');
+    return false;
+  });
+  saveQueue = operation;
+  return operation;
+}
+
+function showBackupReminder(){
+  backupNeeded = true;
+  updateBackupReminderText();   // 根据是否持有文件句柄，切换提示文字
+  $('backupReminder').hidden = false;
+  if(pendingFileHandle){
+    pendingFileHandle = null;
+    forgetHandle();
+    toast('已放弃恢复原文件，本次修改保存在浏览器本地');
+  }
+  try{ localStorage.setItem(BACKUP_KEY, 'true'); }catch(e){
+    setStatus('无法记录备份提醒：' + e.message, 'warn');
+  }
+}
+
+function clearBackupReminder(){
+  backupNeeded = false;
+  $('backupReminder').hidden = true;
+  try{ localStorage.removeItem(BACKUP_KEY); }catch(e){
+    setStatus('无法清除备份提醒状态：' + e.message, 'warn');
+  }
+}
+
+async function loadText(text, fileName, silent){
+  let obj;
+  try{
+    obj = JSON.parse(text);
+  }catch(_){
+    if(silent) return false;
+    return handleInvalidImport(fileName);
+  }
+  if(!obj || typeof obj !== 'object' || Array.isArray(obj)){
+    if(silent) return false;
+    return handleInvalidImport(fileName);
+  }
+  data = obj;
+  storageWritable = true;
+  normalize();
+  clearRevealed();
+  keyword = '';
+  $('search').value = '';
+  currentCat = Object.keys(data)[0] || '';
+  currentSubcat = '*';
+  await render();
+  clearBackupReminder();
+  return true;
+}
+
+async function handleInvalidImport(fileName){
+  const confirmed = await askConfirm(
+    '导入内容有误',
+    '导入的「' + fileName + '」内容有误，请检查确认是否是有效的备份！\n\n是否清空所有分类、小类和密码条目，重新开始？',
+    '清空并重新开始',
+    true
+  );
+  if(!confirmed){
+    setStatus('导入文件内容有误，现有数据未更改。', 'warn');
+    return false;
+  }
+  data = {};
+  currentCat = '';
+  currentSubcat = '*';
+  keyword = '';
+  $('search').value = '';
+  storageWritable = true;
+  clearRevealed();
+  render();
+  showBackupReminder();
+  toast('已清空所有分类、小类和密码');
+  return false;
+}
+
+/* ========== 渲染 ========== */
+function render(){
+  renderCats();
+  renderSubcategories();
+  renderItems();
+  return saveLocal();
+}
+
+function renderCats(){
+  const ul = $('catList');
+  ul.innerHTML = '';
+  const cats = Object.keys(data);
+  $('totalItemCount').textContent = Object.keys(data).reduce((sum, category) => sum + countItems(category), 0);
+  if(!cats.length){
+    ul.innerHTML = '<li style="color:var(--muted);cursor:default">暂无分类</li>';
+    return;
+  }
+  cats.forEach(c => {
+    const li = document.createElement('li');
+    li.className = (c === currentCat && !keyword) ? 'active' : '';
+    li.draggable = !keyword;
+    li.innerHTML =
+      '<span class="cat-name">' + esc(c) + '</span>' +
+      '<span class="count">' + countItems(c) + '</span>' +
+      '<span class="cat-ops">' +
+        '<button class="mini" data-act="rename" title="重命名">✎</button>' +
+        '<button class="mini" data-act="delcat" title="删除分类">✕</button>' +
+      '</span>';
+    li.addEventListener('click', e => {
+      if(e.target.closest('button')) return;
+      currentCat = c;
+      currentSubcat = '*';
+      keyword = '';
+      $('search').value = '';
+      render();
+    });
+    li.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', c);
+      e.dataTransfer.effectAllowed = 'move';
+      li.classList.add('dragging');
+    });
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+      ul.querySelectorAll('.drop-before,.drop-after').forEach(node =>
+        node.classList.remove('drop-before', 'drop-after'));
+    });
+    li.addEventListener('dragover', e => {
+      if(keyword) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const after = e.clientY >= li.getBoundingClientRect().top + li.offsetHeight / 2;
+      li.classList.toggle('drop-before', !after);
+      li.classList.toggle('drop-after', after);
+    });
+    li.addEventListener('dragleave', e => {
+      if(!li.contains(e.relatedTarget)) li.classList.remove('drop-before', 'drop-after');
+    });
+    li.addEventListener('drop', e => {
+      if(keyword) return;
+      e.preventDefault();
+      li.classList.remove('drop-before', 'drop-after');
+      reorderCategories(e.dataTransfer.getData('text/plain'), c,
+        e.clientY >= li.getBoundingClientRect().top + li.offsetHeight / 2);
+    });
+    li.querySelector('[data-act="rename"]').addEventListener('click', e => {
+      e.stopPropagation(); renameCat(c);
+    });
+    li.querySelector('[data-act="delcat"]').addEventListener('click', e => {
+      e.stopPropagation(); delCat(c);
+    });
+    ul.appendChild(li);
+  });
+}
+
+function countItems(cat, subcat){
+  const groups = data[cat] || {};
+  if(subcat != null) return (groups[subcat] || []).length;
+  return Object.keys(groups).reduce((sum, name) => sum + groups[name].length, 0);
+}
+
+function reorderCategories(source, target, after){
+  const names = Object.keys(data);
+  if(!names.includes(source) || !names.includes(target) || source === target) return;
+  const ordered = names.filter(name => name !== source);
+  let targetIndex = ordered.indexOf(target);
+  if(after) targetIndex++;
+  ordered.splice(targetIndex, 0, source);
+  const reordered = {};
+  ordered.forEach(name => { reordered[name] = data[name]; });
+  data = reordered;
+  render();
+  showBackupReminder();
+}
+
+function reorderSubcategories(source, target, after){
+  const groups = data[currentCat];
+  const names = Object.keys(groups || {});
+  if(!groups || !names.includes(source) || !names.includes(target) || source === target) return;
+  if(source === '未分类') return;
+  const ordered = names.filter(name => name !== source && name !== '未分类');
+  let targetIndex;
+  if(target === '未分类'){
+    targetIndex = 0;
+  }else{
+    targetIndex = ordered.indexOf(target);
+    if(targetIndex < 0) return;
+    if(after) targetIndex++;
+  }
+  ordered.splice(targetIndex, 0, source);
+  const allNames = names.includes('未分类') ? ['未分类'].concat(ordered) : ordered;
+  const reordered = {};
+  allNames.forEach(name => { reordered[name] = groups[name]; });
+  data[currentCat] = reordered;
+  render();
+  showBackupReminder();
+}
+
+function renderSubcategories(){
+  const toolbar = $('subcategoryTabs').parentElement;
+  const tabs = $('subcategoryTabs');
+  tabs.innerHTML = '';
+  toolbar.hidden = Boolean(keyword);
+  if(keyword || !currentCat || !data[currentCat]) return;
+
+  const names = Object.keys(data[currentCat]);
+  const orderedNames = names.includes('未分类')
+    ? ['未分类'].concat(names.filter(name => name !== '未分类'))
+    : names;
+  const options = [['*', '全部', countItems(currentCat)]]
+    .concat(orderedNames.map(name => [name, name, countItems(currentCat, name)]));
+  options.forEach(([value, label, count]) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'subcat-tab-wrap' + (currentSubcat === value ? ' active-subcat' : '');
+    if(value !== '*' && value !== '未分类'){
+      wrapper.draggable = !keyword;
+      wrapper.title = '拖动调整小类顺序';
+      wrapper.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', value);
+        e.dataTransfer.effectAllowed = 'move';
+        wrapper.classList.add('dragging');
+      });
+      wrapper.addEventListener('dragend', () => {
+        wrapper.classList.remove('dragging');
+        tabs.querySelectorAll('.drop-before,.drop-after').forEach(node =>
+          node.classList.remove('drop-before', 'drop-after'));
+      });
+      wrapper.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const after = e.clientX >= wrapper.getBoundingClientRect().left + wrapper.offsetWidth / 2;
+        wrapper.classList.toggle('drop-before', !after);
+        wrapper.classList.toggle('drop-after', after);
+      });
+      wrapper.addEventListener('dragleave', e => {
+        if(!wrapper.contains(e.relatedTarget)) wrapper.classList.remove('drop-before', 'drop-after');
+      });
+      wrapper.addEventListener('drop', e => {
+        e.preventDefault();
+        wrapper.classList.remove('drop-before', 'drop-after');
+        reorderSubcategories(e.dataTransfer.getData('text/plain'), value,
+          e.clientX >= wrapper.getBoundingClientRect().left + wrapper.offsetWidth / 2);
+      });
+    }else if(value === '未分类'){
+      wrapper.title = '未分类固定显示在全部之后';
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'subcat-tab' + (currentSubcat === value ? ' active' : '');
+    button.setAttribute('aria-pressed', String(currentSubcat === value));
+    const content = document.createElement('span');
+    content.className = 'subcat-tab-content';
+    content.append(document.createTextNode(label));
+    const countLabel = document.createElement('span');
+    countLabel.className = 'subcat-count';
+    countLabel.textContent = count;
+    content.appendChild(countLabel);
+    button.appendChild(content);
+    button.addEventListener('click', () => {
+      currentSubcat = value;
+      render();
+    });
+    if(value !== '*'){
+      const rename = document.createElement('button');
+      rename.type = 'button';
+      rename.className = 'subcat-rename';
+      rename.textContent = '✎';
+      rename.title = '重命名小类';
+      rename.setAttribute('aria-label', '重命名小类 ' + label);
+      rename.addEventListener('click', event => {
+        event.stopPropagation();
+        renameSubcat(value);
+      });
+      wrapper.appendChild(button);
+      wrapper.appendChild(rename);
+    }else{
+      wrapper.appendChild(button);
+    }
+    tabs.appendChild(wrapper);
+  });
+}
+
+function matchItem(it, kw){
+  kw = kw.toLowerCase();
+  return [it.title, it.description, it.username, it.endpointHost, it.endpointPort, it.url, it.note]
+    .some(v => String(v || '').toLowerCase().includes(kw));
+}
+
+function renderItems(){
+  const box = $('itemList');
+  box.innerHTML = '';
+  const list = [];
+
+  if(keyword){
+    $('catTitle').parentElement.hidden = false;
+    $('catTitle').textContent = '搜索：' + keyword;
+    Object.keys(data).forEach(c => {
+      const categoryMatches = c.toLowerCase().includes(keyword.toLowerCase());
+      Object.keys(data[c]).forEach(subcat => {
+        const groupMatches = categoryMatches || subcat.toLowerCase().includes(keyword.toLowerCase());
+        data[c][subcat].forEach((it, i) => {
+          if(groupMatches || matchItem(it, keyword)) list.push({cat:c, subcat:subcat, idx:i, item:it});
+        });
+      });
+    });
+  }else{
+    $('catTitle').parentElement.hidden = true;
+    const subcats = data[currentCat] || {};
+    const names = currentSubcat === '*' ? Object.keys(subcats) : [currentSubcat];
+    names.forEach(subcat => {
+      (subcats[subcat] || []).forEach((it, i) => list.push({cat:currentCat, subcat:subcat, idx:i, item:it}));
+    });
+  }
+
+  if(!list.length){
+    box.innerHTML = '<div class="empty">' +
+      (keyword ? '没有找到匹配的密码' : currentSubcat === '*'
+        ? '这个分类还没有密码，先添加小类，再选择小类添加密码'
+        : '这个小类还没有密码，点击「+ 添加密码」') +
+      '</div>';
+    return;
+  }
+  list.forEach(o => box.appendChild(buildCard(o.cat, o.subcat, o.idx, o.item)));
+}
+
+function buildCard(cat, subcat, idx, item){
+  const key = JSON.stringify([cat, subcat, idx]);
+  const shown = revealed.has(key);
+  const mask = item.password ? '•'.repeat(Math.min(item.password.length, 12)) : '';
+
+  const el = document.createElement('div');
+  el.className = 'card';
+
+  const h = [];
+  h.push('<div class="card-head"><div class="card-title"><div class="card-title-row"><div class="t">' + esc(item.title || '(未命名)') + '</div>' +
+    '<button class="icon" data-act="duplicate" title="复制密码卡片" aria-label="复制密码卡片">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg></button></div>' +
+    (item.description ? '<div class="card-subtitle">' + esc(item.description) + '</div>' : '') +
+    '</div>' +
+    '<div class="ops">' +
+      '<button class="icon" data-act="move" title="移动到其他分类或小类" aria-label="移动到其他分类或小类">↗</button>' +
+      '<button class="icon" data-act="edit" title="编辑">✎</button>' +
+      '<button class="icon danger" data-act="del" title="删除">✕</button>' +
+    '</div></div>');
+
+  if(keyword || currentSubcat === '*') h.push('<div class="cat-tag">' + esc(cat) + ' / ' + esc(subcat) + '</div>');
+
+  h.push('<div class="field"><span class="k">账号</span><span class="v">' +
+    (item.username ? esc(item.username) : '<span class="muted">—</span>') + '</span>' +
+    (item.username ? '<button class="icon" data-act="copy-user" title="复制账号" aria-label="复制账号">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg></button>' : '') +
+    '</div>');
+
+  h.push('<div class="field"><span class="k">密码</span><span class="v mono">' +
+    (shown ? esc(item.password) : esc(mask)) + '</span>' +
+    '<button class="icon" data-act="toggle" title="' + (shown ? '隐藏密码' : '显示密码') +
+      '" aria-label="' + (shown ? '隐藏密码' : '显示密码') + '" aria-pressed="' + shown + '">' +
+      (shown
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 002.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0112 5c5 0 9 4.5 10 7-.4 1.1-1.2 2.2-2.2 3.2"/><path d="M6.2 6.2C3.9 7.6 2.5 9.8 2 12c1 2.5 5 7 10 7 1.1 0 2.1-.2 3-.6"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>') +
+      '</button>' +
+    '<button class="icon" data-act="copy-pw" title="复制密码" aria-label="复制密码">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg>' +
+      '</button></div>');
+
+  if(item.url){
+    const safe = /^https?:\/\//i.test(item.url);
+    h.push('<div class="field"><span class="k">网址</span>' +
+      (safe
+        ? '<a class="v link" href="' + esc(item.url) + '" target="_blank" rel="noopener noreferrer">' + esc(item.url) + '</a>'
+        : '<span class="v">' + esc(item.url) + '</span>') +
+      '<button class="icon" data-act="copy-url" title="复制网址" aria-label="复制网址">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg></button></div>');
+  }
+
+  if(item.endpointHost || item.endpointPort){
+    const endpoint = item.endpointHost && item.endpointPort
+      ? item.endpointHost + ':' + item.endpointPort
+      : item.endpointHost || item.endpointPort;
+    h.push('<div class="field"><span class="k">连接</span><span class="v mono">' +
+      esc(endpoint) + '</span><button class="icon" data-act="copy-endpoint" title="复制连接信息" aria-label="复制连接信息">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg></button></div>');
+  }
+
+  if(item.note){
+    h.push('<div class="field"><span class="k">备注</span><span class="v">' + esc(item.note) + '</span></div>');
+  }
+
+  el.innerHTML = h.join('');
+
+  el.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.act;
+      if(act === 'move')       openMove(cat, subcat, idx);
+      else if(act === 'duplicate') duplicateCard(cat, subcat, idx);
+      else if(act === 'edit')  openEdit(cat, subcat, idx);
+      else if(act === 'del')   delItem(cat, subcat, idx);
+      else if(act === 'toggle'){
+        toggleRevealed(key);
+        renderItems();
+      }
+      else if(act === 'copy-user') copy(item.username);
+      else if(act === 'copy-pw')   copy(item.password);
+      else if(act === 'copy-endpoint') copy(item.endpointHost && item.endpointPort
+        ? item.endpointHost + ':' + item.endpointPort
+        : item.endpointHost || item.endpointPort);
+      else if(act === 'copy-url')  copy(item.url);
+    });
+  });
+  return el;
+}
+
+/* ========== 分类操作 ========== */
+async function addCat(){
+  const name = await askName('新增分类', '分类名称', '', n => {
+    if(data[n]) return '已存在同名分类。';
+    return '';
+  });
+  if(name == null) return;
+  const n = name.trim();
+  if(!n) return;
+  if(data[n]) return;
+  data[n] = {};
+  currentCat = n;
+  currentSubcat = '*';
+  render();
+  showBackupReminder();
+}
+
+async function addSubcat(){
+  if(!currentCat || !data[currentCat]){
+    toast('请先选择一个分类');
+    return;
+  }
+  const name = await askName('新增小类', '小类名称', '新小类', n => {
+    if(n === '全部') return '「全部」是系统视图名称，请使用其他小类名称。';
+    if(Object.prototype.hasOwnProperty.call(data[currentCat], n)) return '当前分类下已存在同名小类。';
+    return '';
+  });
+  if(name == null) return;
+  const n = name.trim();
+  if(!n) return;
+  data[currentCat][n] = [];
+  currentSubcat = n;
+  keyword = '';
+  $('search').value = '';
+  render();
+  showBackupReminder();
+}
+
+async function renameSubcat(subcat){
+  const name = await askName('重命名小类', '小类名称', subcat, n => {
+    if(n === '全部') return '「全部」是系统视图名称，请使用其他小类名称。';
+    if(n !== subcat && Object.prototype.hasOwnProperty.call(data[currentCat], n)) return '当前分类下已存在同名小类。';
+    return '';
+  });
+  if(name == null) return;
+  const n = name.trim();
+  if(!n || n === subcat) return;
+  const groups = data[currentCat];
+  const renamed = {};
+  Object.keys(groups).forEach(key => { renamed[key === subcat ? n : key] = groups[key]; });
+  data[currentCat] = renamed;
+  if(currentSubcat === subcat) currentSubcat = n;
+  clearRevealed();
+  render();
+  showBackupReminder();
+}
+
+async function renameCat(c){
+  const name = await askName('重命名分类', '分类名称', c, n => {
+    if(n !== c && data[n]) return '已存在同名分类。';
+    return '';
+  });
+  if(name == null) return;
+  const n = name.trim();
+  if(!n || n === c) return;
+  const out = {};
+  Object.keys(data).forEach(k => { out[k === c ? n : k] = data[k]; });
+  data = out;
+  if(currentCat === c) currentCat = n;
+  render();
+  showBackupReminder();
+}
+
+async function delCat(c){
+  if(!await askConfirm('删除分类', '确定删除分类「' + c + '」及其中的 ' + countItems(c) + ' 条密码？', '删除', true)) return;
+  delete data[c];
+  if(currentCat === c){
+    currentCat = Object.keys(data)[0] || '';
+    currentSubcat = '*';
+  }
+  clearRevealed();
+  render();
+  showBackupReminder();
+}
+
+/* ========== 条目操作 ========== */
+function addItem(){
+  if(keyword){
+    toast('请先清除搜索并选择一个小类');
+    return;
+  }
+  if(!currentCat || !data[currentCat]){
+    toast('请先选择一个分类');
+    return;
+  }
+  if(currentSubcat === '*'){
+    toast(Object.keys(data[currentCat]).length ? '请先选择一个小类' : '请先添加小类');
+    return;
+  }
+  openEdit(currentCat, currentSubcat, null);
+}
+
+function openEdit(cat, subcat, idx){
+  editCtx = {cat: cat, subcat: subcat, idx: idx};
+  const form = $('form');
+  form.elements['password'].type = 'password';
+  $('btnToggleFormPassword').textContent = '显示';
+  $('btnToggleFormPassword').setAttribute('aria-pressed', 'false');
+  const item = (idx == null)
+    ? {title:'', description:'', username:'', password:'', endpointHost:'', endpointPort:'', url:'', note:''}
+    : data[cat][subcat][idx];
+
+  $('dlgTitle').textContent = (idx == null) ? '添加密码' : '编辑密码';
+  form.elements['title'].value    = item.title;
+  form.elements['description'].value = item.description || '';
+  form.elements['username'].value = item.username;
+  form.elements['password'].value = item.password;
+  form.elements['endpointHost'].value = item.endpointHost || item.host || '';
+  form.elements['endpointPort'].value = item.endpointPort || item.port || '';
+  form.elements['url'].value      = item.url;
+  form.elements['note'].value     = item.note;
+
+  $('dlg').showModal();
+  setTimeout(() => form.elements['title'].focus(), 50);
+}
+
+function openMove(cat, subcat, idx){
+  const item = data[cat] && data[cat][subcat] && data[cat][subcat][idx];
+  if(!item){
+    setStatus('无法移动：找不到要移动的密码条目。', 'warn');
+    return;
+  }
+  $('moveItemName').textContent = '正在移动：' + (item.title || '(未命名)');
+  $('moveItemName').hidden = false;
+  const categorySelect = $('moveForm').elements['category'];
+  const subcategorySelect = $('moveForm').elements['subcategory'];
+  categorySelect.replaceChildren();
+  Object.keys(data).forEach(name => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    option.selected = name === cat;
+    categorySelect.appendChild(option);
+  });
+  categorySelect.onchange = () => populateMoveSubcategories(categorySelect.value, subcategorySelect, subcat);
+  populateMoveSubcategories(cat, subcategorySelect, subcat);
+  editCtx = {cat, subcat, idx};
+  $('moveDlg').showModal();
+}
+
+function populateMoveSubcategories(cat, select, selectedSubcat){
+  select.replaceChildren();
+  const names = Object.keys(data[cat] || {});
+  if(!names.length) names.push('未分类');
+  const ordered = names.includes('未分类')
+    ? ['未分类'].concat(names.filter(name => name !== '未分类'))
+    : names;
+  ordered.forEach(name => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    option.selected = name === selectedSubcat;
+    select.appendChild(option);
+  });
+}
+
+function duplicateCard(cat, subcat, idx){
+  const source = data[cat] && data[cat][subcat] && data[cat][subcat][idx];
+  if(!source){
+    setStatus('复制失败：找不到要复制的密码条目。', 'warn');
+    return;
+  }
+  const copy = {...source, title:(source.title || '未命名') + '（副本）'};
+  data[cat][subcat].splice(idx + 1, 0, copy);
+  render();
+  showBackupReminder();
+}
+
+function uniqueTitle(cat, subcat, base){
+  const names = new Set((data[cat][subcat] || []).map(it => it.title));
+  if(!names.has(base)) return base;
+  let candidate = base + '（副本）';
+  let n = 2;
+  while(names.has(candidate)){
+    candidate = base + '（副本' + n + '）';
+    n++;
+  }
+  return candidate;
+}
+
+async function delItem(cat, subcat, idx){
+  const it = data[cat][subcat][idx];
+  const isLast = data[cat][subcat].length === 1;
+  const msg = '确定删除密码「' + (it.title || '未命名') + '」？' +
+    (isLast ? '\n\n该小类「' + subcat + '」下没有其他密码，删除后将同时删除该小类。' : '');
+  if(!await askConfirm('删除密码', msg, '删除', true)) return;
+  data[cat][subcat].splice(idx, 1);
+  if(data[cat][subcat].length === 0){
+    delete data[cat][subcat];
+    if(currentSubcat === subcat) currentSubcat = '*';
+  }
+  clearRevealed();
+  render();
+  showBackupReminder();
+}
+
+/* ========== 文件导入 / 保存 / 备份 ========== */
+async function openFile(){
+  if(window.showOpenFilePicker){
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [{
+          description: 'KM 数据文件 (.ini / .json)',
+          accept: {
+            'application/json': ['.ini', '.json'],
+            'text/plain': ['.ini', '.txt']
+          }
+        }]
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      if(await loadText(text, file.name)){
+        setFileHandle(handle);
+        await rememberHandle(handle);
+        setStatus('已导入 ' + file.name + '（点击「保存」可直接写回该文件）', 'ok');
+      }
+    }catch(err){
+      if(err && err.name !== 'AbortError'){
+        setStatus('导入文件失败：' + (err.message || err), 'warn');
+      }
+    }
+  }else{
+    $('fileInput').click();
+  }
+}
+
+async function saveFile(){
+  if(!fileHandle){
+    toast('尚未打开可写文件，请点击「导入文件」');
+    return;
+  }
+  const text = JSON.stringify(serializedBackupData(), null, 2);
+  await saveLocal();
+
+  try{
+    let perm = 'granted';
+    if(fileHandle.queryPermission) perm = await fileHandle.queryPermission({mode:'readwrite'});
+    if(perm !== 'granted' && fileHandle.requestPermission){
+      perm = await fileHandle.requestPermission({mode:'readwrite'});
+    }
+    if(perm !== 'granted'){
+      setStatus('未获得文件写入权限，请重新点击「导入文件」选择该文件。', 'warn');
+      return;
+    }
+    const writable = await fileHandle.createWritable();
+    await writable.write(text);
+    await writable.close();
+    clearBackupReminder();
+    setStatus('已保存到 ' + (fileHandle.name || '原文件'), 'ok');
+  }catch(err){
+    await forgetHandle();
+    setFileHandle(null);
+    if(err && err.name === 'NotFoundError'){
+      setStatus('原文件已被删除或移动，已恢复为浏览器本地存储方案。可点击顶栏「导入文件」重新选择文件。', 'warn');
+    }else{
+      setStatus('写回原文件失败：' + (err.message || err) + '。已恢复为浏览器本地存储方案，可重新「导入文件」。', 'warn');
+    }
+  }
+}
+
+async function exportFile(){
+  const localSaved = await saveLocal();
+  const blob = new Blob([JSON.stringify(serializedBackupData(), null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'km.ini';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  clearBackupReminder();
+  setStatus(localSaved
+    ? '备份文件已导出。日常数据仍保存在当前浏览器中。'
+    : '备份文件已导出，但浏览器本地保存失败，请检查浏览器存储空间。', localSaved ? 'ok' : 'warn');
+}
+
+/* ========== 启动时加载 ========== */
+async function bootstrapLocal(){
+  let loadError = '';
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const o = await decryptLocal(raw);
+      if(o && typeof o === 'object' && !Array.isArray(o)) data = o;
+      else throw new Error('本地数据内容格式无效');
+    }
+  }catch(e){
+    storageWritable = false;
+    loadError = '无法解密或读取浏览器本地数据：' + e.message + '。为避免覆盖原数据，已暂停本地保存；请导入可用的 km.ini 备份。';
+  }
+  try{ backupNeeded = localStorage.getItem(BACKUP_KEY) === 'true'; }catch(e){
+    if(!loadError) loadError = '无法读取本地备份提醒状态：' + e.message;
+  }
+  normalize();
+  if(!Object.keys(data).length) data = defaultData();
+  currentCat = Object.keys(data)[0] || '';
+  currentSubcat = '*';
+  await render();
+  if(backupNeeded) updateBackupReminderText();   // 恢复上次的提醒文字
+  $('backupReminder').hidden = !backupNeeded;
+  if(loadError) setStatus(loadError, 'warn');
+  else if(localSaveOk) setStatus('数据默认加密后保存在当前浏览器的本地存储中；如需要迁移或备份时，请手动「导入文件」或「导出备份」。');
+}
+
+async function autoLoadKmIni(){
+  /* ---- 1) HTTP(S) ---- */
+  if(location.protocol === 'http:' || location.protocol === 'https:'){
+    try{
+      const res = await fetch('km.ini', {cache:'no-store'});
+      if(res.ok){
+        const text = await res.text();
+        if(await loadText(text, 'km.ini', true)){
+          setFileHandle(null);
+          setStatus('已自动载入同目录 km.ini（只读）。如需写回原文件，请点击「导入文件」选择该文件。', 'ok');
+        }
+        return;
+      }
+      return;
+    }catch(e){
+      return;
+    }
+  }
+
+  /* ---- 2) file:// ---- */
+  if(!window.showOpenFilePicker) return;
+
+  let handle = null;
+  try{ handle = await idbGet(HANDLE_KEY); }catch(e){ handle = null; }
+  if(!handle) return;
+
+  try{
+    const file = await handle.getFile();
+    const text = await file.text();
+    if(await loadText(text, file.name, true)){
+      setFileHandle(handle);
+      setStatus('已自动载入 ' + file.name + '，点击「保存」可直接写回。', 'ok');
+    }else{
+      setStatus('上次使用的 ' + file.name + ' 内容无效，已使用本地缓存数据。', 'warn');
+    }
+    return;
+  }catch(err){
+    if(err && err.name === 'NotFoundError'){
+      await forgetHandle();
+      return;
+    }
+    pendingFileHandle = handle;
+    setStatus('检测到上次使用的文件「' + handle.name + '」，一键恢复自动读取。', '', '恢复访问', async () => {
+      try{
+        try{
+          if(handle.requestPermission) await handle.requestPermission({mode:'read'});
+        }catch(e){ /* 忽略 */ }
+
+        const file = await handle.getFile();
+        const text = await file.text();
+        if(await loadText(text, file.name, true)){
+          setFileHandle(handle);
+          setStatus('已载入 ' + file.name + '（点击「保存」可直接写回）', 'ok');
+        }else{
+          pendingFileHandle = null;
+          setStatus('文件内容无效，已使用本地缓存数据。', 'warn');
+        }
+      }catch(err2){
+        pendingFileHandle = null;
+        await forgetHandle();
+        if(err2 && err2.name === 'NotFoundError'){
+          setStatus('上次使用的文件已不存在，已恢复为浏览器本地存储方案。');
+        }else if(err2 && (err2.name === 'NotAllowedError' || err2.name === 'SecurityError')){
+          setStatus('浏览器仍需要您重新选择一次该文件，请点击顶栏「导入文件」。', 'warn');
+        }else{
+          setStatus('文件不可用：' + (err2.message || err2), 'warn');
+        }
+      }
+    });
+  }
+}
+
+/* ========== 事件绑定 ========== */
+$('noticeClose').addEventListener('click', () => {
+  $('notice').hidden = true;
+  if(pendingFileHandle){
+    pendingFileHandle = null;
+    forgetHandle();
+    toast('已放弃恢复原文件，本次修改保存在浏览器本地存储中');
+  }
+});
+$('btnOpen').addEventListener('click', openFile);
+$('btnSave').addEventListener('click', saveFile);
+$('btnExport').addEventListener('click', exportFile);
+$('btnAddCat').addEventListener('click', addCat);
+$('btnActionCancel').addEventListener('click', () => finishActionDialog(null));
+$('actionDlg').addEventListener('close', () => {
+  if(actionDialogResolver){
+    const resolve = actionDialogResolver;
+    actionDialogResolver = null;
+    actionDialogOptions = null;
+    resolve(null);
+  }
+});
+$('actionForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const options = actionDialogOptions;
+  if(!options) return;
+  if(options.inputLabel){
+    const value = $('actionInput').value;
+    const error = !value.trim() ? '名称不能为空。' : (options.validate ? options.validate(value.trim()) : '');
+    if(error){
+      $('actionError').textContent = error;
+      $('actionError').hidden = false;
+      $('actionInput').focus();
+      return;
+    }
+    finishActionDialog(value);
+    return;
+  }
+  finishActionDialog(true);
+});
+$('btnAddSubcat').addEventListener('click', addSubcat);
+$('btnAddItem').addEventListener('click', addItem);
+$('btnGen').addEventListener('click', () => {
+  $('form').elements['password'].value = genPassword(16);
+});
+$('btnToggleFormPassword').addEventListener('click', e => {
+  const input = $('form').elements['password'];
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  e.currentTarget.textContent = show ? '隐藏' : '显示';
+  e.currentTarget.setAttribute('aria-pressed', String(show));
+});
+$('dlg').addEventListener('close', () => {
+  $('form').elements['password'].type = 'password';
+  $('btnToggleFormPassword').textContent = '显示';
+  $('btnToggleFormPassword').setAttribute('aria-pressed', 'false');
+});
+$('btnCancel').addEventListener('click', () => $('dlg').close());
+$('btnMoveCancel').addEventListener('click', () => $('moveDlg').close());
+$('moveForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const ctx = editCtx;
+  const form = e.currentTarget;
+  const targetCat = form.elements['category'].value;
+  const targetSubcat = form.elements['subcategory'].value;
+  if(!ctx || !data[ctx.cat] || !data[ctx.cat][ctx.subcat] ||
+    !data[targetCat] || (targetSubcat !== '未分类' && !data[targetCat][targetSubcat])){
+    $('moveDlg').close();
+    setStatus('移动失败：源条目或目标分类已不存在。', 'warn');
+    return;
+  }
+  if(ctx.cat === targetCat && ctx.subcat === targetSubcat){
+    $('moveDlg').close();
+    return;
+  }
+  const source = data[ctx.cat][ctx.subcat];
+  const [item] = source.splice(ctx.idx, 1);
+  if(!item){
+    $('moveDlg').close();
+    setStatus('移动失败：找不到要移动的密码条目。', 'warn');
+    return;
+  }
+  if(source.length === 0){
+    delete data[ctx.cat][ctx.subcat];
+    if(ctx.cat === currentCat && currentSubcat === ctx.subcat) currentSubcat = '*';
+  }
+  if(!data[targetCat][targetSubcat]) data[targetCat][targetSubcat] = [];
+  if(item.title){
+    const original = item.title;
+    const renamed = uniqueTitle(targetCat, targetSubcat, original);
+    if(renamed !== original){
+      item.title = renamed;
+      toast('目标位置已存在同名「' + original + '」，已自动改名为「' + renamed + '」');
+    }
+  }
+  data[targetCat][targetSubcat].push(item);
+  clearRevealed();
+  $('moveDlg').close();
+  render();
+  showBackupReminder();
+});
+
+$('search').addEventListener('input', e => {
+  keyword = e.target.value.trim();
+  renderCats();
+  renderSubcategories();
+  renderItems();
+});
+
+$('fileInput').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if(!f) return;
+  try{
+    const text = await f.text();
+    if(await loadText(text, f.name)){
+      setFileHandle(null);
+      if(localSaveOk) setStatus('已导入 ' + f.name + '，数据已加密保存到当前浏览器本地存储。', 'ok');
+    }
+  }catch(err){
+    setStatus('导入文件失败：' + err.message, 'warn');
+  }finally{
+    e.target.value = '';
+  }
+});
+
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const item = {
+    title:    String(fd.get('title') || '').trim() || '未命名',
+    description: String(fd.get('description') || '').trim(),
+    username: String(fd.get('username') || '').trim(),
+    password: String(fd.get('password') || ''),
+    endpointHost: String(fd.get('endpointHost') || '').trim(),
+    endpointPort: String(fd.get('endpointPort') || '').trim(),
+    url:      String(fd.get('url') || '').trim(),
+    note:     String(fd.get('note') || '').trim()
+  };
+  const ctx = editCtx;
+  if(!ctx || !data[ctx.cat] || !data[ctx.cat][ctx.subcat]){ $('dlg').close(); return; }
+
+  if(ctx.idx == null) data[ctx.cat][ctx.subcat].push(item);
+  else data[ctx.cat][ctx.subcat][ctx.idx] = item;
+
+  clearRevealed();
+  $('dlg').close();
+  render();
+  showBackupReminder();
+});
+
+document.addEventListener('keydown', e => {
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){
+    e.preventDefault();
+    if(fileHandle) saveFile();
+    else toast('当前未打开可写文件，请点击「导入文件」');
+  }
+});
+
+/* ========== 初始化 ========== */
+(async function init(){
+  setFileHandle(null);
+  await bootstrapLocal();
+  autoLoadKmIni();
+})();
+
+})();
+</script>
+</body>
+</html>
